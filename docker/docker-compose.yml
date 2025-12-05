@@ -1,0 +1,42 @@
+# Roony Governance - Self-Hosted Docker Compose
+#
+# This is an example setup. For production, you'll want to:
+# - Use a real database (Postgres, etc.)
+# - Implement proper secrets management
+# - Add SSL/TLS termination
+# - Set up monitoring and logging
+
+version: '3.8'
+
+services:
+  roony:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Database (implement your own StorageProvider)
+      - DATABASE_URL=postgres://roony:password@db:5432/roony
+      # Stripe (for StripeIssuingProvider)
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_CARDHOLDER_ID=${STRIPE_CARDHOLDER_ID}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=roony
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=roony
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+

@@ -1,366 +1,347 @@
-# @roony-pay/mcp
+# Roony Governance
 
-A lightweight, flexible TypeScript library for building MCP (Model Context Protocol) servers.
+**Open source AI agent payment governance engine.**
 
-MCP is an open protocol from Anthropic that enables AI assistants to interact with external tools, resources, and prompts. This library makes it easy to build MCP-compliant servers that work with Claude, Cursor, and other MCP clients.
+Give your AI agents the ability to make purchases with built-in spending controls, approval workflows, and audit trails.
 
-## Features
+<p align="center">
+  <img src="https://img.shields.io/npm/v/@roony-pay/governance" alt="npm version">
+  <img src="https://img.shields.io/github/license/roony-pay/roony-mcp" alt="license">
+  <img src="https://img.shields.io/github/stars/roony-pay/roony-mcp" alt="stars">
+</p>
 
-- 🚀 **Simple API** - Define tools with just a few lines of code
-- 📦 **Zero dependencies** - Lightweight and fast
-- 🔒 **Type-safe** - Full TypeScript support with generics
-- 🔌 **Framework agnostic** - Works with Next.js, Express, Fastify, or any HTTP framework
-- ⚡ **Full MCP support** - Tools, resources, and prompts
+## Why Roony?
 
-## Installation
+AI agents are increasingly autonomous—booking travel, purchasing software, managing subscriptions. But how do you give an AI your credit card without losing control?
 
-```bash
-npm install @roony-pay/mcp
-# or
-pnpm add @roony-pay/mcp
-# or
-yarn add @roony-pay/mcp
-```
+**Roony provides:**
+
+- 🔒 **Spending Limits** - Per-transaction, daily, and monthly caps
+- 🏪 **Merchant Controls** - Allow/block specific merchants or categories  
+- 👤 **Human Approval** - Require review for large or unusual purchases
+- 🏢 **Organization Guardrails** - Company-wide policies across all agents
+- 💳 **Virtual Cards** - Single-use cards that expire after purchase
+- 🤖 **MCP Support** - Works with Claude, Cursor, and other MCP clients
 
 ## Quick Start
 
+### Option 1: Use Hosted Roony (Easiest)
+
+Just use [roony.pay](https://roony.pay) - we handle everything:
+- Dashboard to manage agents and policies
+- Stripe integration for virtual cards
+- No infrastructure to manage
+
+### Option 2: Self-Host
+
+```bash
+npm install @roony-pay/governance
+```
+
 ```typescript
-import { createMCPServer, defineTool, prop, textResult, jsonResult } from "@roony-pay/mcp";
+import {
+  createRoonyMCPServer,
+  InMemoryStorageProvider,
+  MockPaymentProvider,
+} from "@roony-pay/governance";
 
-// Define a tool
-const helloTool = defineTool({
-  name: "hello",
-  description: "Say hello to someone",
-  properties: {
-    name: prop("string", { description: "Name to greet" }),
-  },
-  required: ["name"],
-  handler: async (args) => {
-    return textResult(`Hello, ${args.name}!`);
+// Create providers (use your own implementations for production)
+const storage = new InMemoryStorageProvider();
+const payments = new MockPaymentProvider();
+
+// Add an organization
+storage.addOrganization({
+  id: "org_123",
+  name: "Acme Corp",
+  monthlyBudget: 10000,
+  guardrails: {
+    maxTransactionAmount: 500,
+    requireApprovalAbove: 200,
   },
 });
 
-// Create the server
-const server = createMCPServer({
-  name: "my-server",
-  version: "1.0.0",
-  tools: [helloTool],
+// Add an agent with spending controls
+storage.addAgent({
+  id: "agent_123",
+  organizationId: "org_123",
+  name: "Shopping Assistant",
+  status: "active",
+  monthlyLimit: 1000,
+  perTransactionLimit: 100,
+  approvalThreshold: 50,
+  flagNewVendors: true,
 });
 
-// Handle requests (example with Next.js App Router)
+// Create MCP server
+const server = createRoonyMCPServer({
+  storage,
+  paymentProvider: payments,
+});
+
+// Handle requests (e.g., in Next.js API route)
 export async function POST(req: Request) {
   const body = await req.json();
-  const response = await server.handleRequest(body);
+  const response = await server.handleRequest(body, "agent_123", "org_123");
   return Response.json(response);
 }
 ```
 
-## Defining Tools
+## How It Works
 
-Tools are the primary way AI agents interact with your server. Each tool has a name, description, input schema, and handler function.
-
-### Basic Tool
-
-```typescript
-import { defineTool, prop, textResult } from "@roony-pay/mcp";
-
-const greetTool = defineTool({
-  name: "greet",
-  description: "Greet a user by name",
-  properties: {
-    name: prop("string", { description: "The user's name" }),
-    formal: prop("boolean", { description: "Use formal greeting" }),
-  },
-  required: ["name"],
-  handler: async (args) => {
-    const greeting = args.formal ? "Good day" : "Hey";
-    return textResult(`${greeting}, ${args.name}!`);
-  },
-});
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  AI Agent   │────▶│  Roony Gateway   │────▶│  Your Payment   │
+│  (Claude)   │     │                  │     │  Provider       │
+└─────────────┘     │  ✓ Check limits  │     │  (Stripe, etc)  │
+                    │  ✓ Evaluate rules│     └─────────────────┘
+                    │  ✓ Log & audit   │              │
+                    │  ✓ Issue card    │              ▼
+                    └──────────────────┘     ┌─────────────────┐
+                             │               │    Merchant     │
+                             ▼               └─────────────────┘
+                    ┌──────────────────┐
+                    │  Approval Queue  │
+                    │  (if needed)     │
+                    └──────────────────┘
 ```
 
-### Tool with JSON Response
+### MCP Tools
+
+When connected via MCP, agents have access to these tools:
+
+| Tool | Description |
+|------|-------------|
+| `request_purchase` | Request a purchase, get a virtual card if approved |
+| `check_budget` | Check remaining budget and limits |
+| `list_transactions` | View transaction history |
+| `get_policy_info` | See what rules apply to this agent |
+
+### Example: Agent Requests a Purchase
+
+```json
+// Agent calls request_purchase
+{
+  "amount": 49.99,
+  "currency": "usd",
+  "description": "Monthly Figma subscription",
+  "merchant_name": "Figma"
+}
+
+// If approved, agent receives:
+{
+  "status": "approved",
+  "card": {
+    "number": "4242424242424242",
+    "exp_month": 12,
+    "exp_year": 2025,
+    "cvc": "123"
+  },
+  "hard_limit_amount": 49.99,
+  "expires_at": "2025-12-05T15:00:00Z"
+}
+
+// If rejected:
+{
+  "status": "rejected",
+  "reason_code": "OVER_TRANSACTION_LIMIT",
+  "message": "Amount $49.99 exceeds per-transaction limit of $25.00",
+  "suggestion": "Try a smaller purchase amount..."
+}
+
+// If needs approval:
+{
+  "status": "pending_approval",
+  "message": "Amount exceeds approval threshold",
+  "purchase_intent_id": "pi_abc123"
+}
+```
+
+## Spending Controls
+
+### Agent-Level Controls
+
+| Control | Description |
+|---------|-------------|
+| `monthlyLimit` | Max spend per month |
+| `dailyLimit` | Max spend per day |
+| `perTransactionLimit` | Max per single purchase |
+| `approvalThreshold` | Require human approval above this |
+| `flagNewVendors` | Require approval for first purchase at new merchants |
+| `blockedMerchants` | List of blocked merchant names |
+| `allowedMerchants` | If set, only these merchants allowed |
+
+### Organization Guardrails
+
+| Guardrail | Description |
+|-----------|-------------|
+| `monthlyBudget` | Total budget across all agents |
+| `maxTransactionAmount` | Hard cap on any single transaction |
+| `requireApprovalAbove` | All purchases above this need review |
+| `flagAllNewVendors` | All new vendors need approval |
+| `blockCategories` | Block entire merchant categories |
+
+## Implementing Providers
+
+### Storage Provider
+
+Implement `StorageProvider` to use your own database:
 
 ```typescript
-import { defineTool, prop, jsonResult } from "@roony-pay/mcp";
+import type { StorageProvider } from "@roony-pay/governance";
 
-const getUserTool = defineTool({
-  name: "get_user",
-  description: "Get user information",
-  properties: {
-    id: prop("string", { description: "User ID" }),
-  },
-  required: ["id"],
-  handler: async (args) => {
-    const user = await db.users.findById(args.id);
-    return jsonResult({
-      id: user.id,
-      name: user.name,
-      email: user.email,
+class PostgresStorageProvider implements StorageProvider {
+  async getAgent(agentId: string) {
+    return await db.query("SELECT * FROM agents WHERE id = $1", [agentId]);
+  }
+  
+  async getAgentSpend(agentId: string, period: "daily" | "monthly") {
+    // Sum approved purchases for the period
+  }
+  
+  // ... implement other methods
+}
+```
+
+### Payment Provider
+
+Implement `PaymentProvider` to use your payment processor:
+
+```typescript
+import type { PaymentProvider } from "@roony-pay/governance";
+import Stripe from "stripe";
+
+class StripePaymentProvider implements PaymentProvider {
+  private stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  
+  async createVirtualCard(request) {
+    const card = await this.stripe.issuing.cards.create({
+      cardholder: process.env.CARDHOLDER_ID,
+      type: "virtual",
+      currency: request.currency,
+      spending_controls: {
+        spending_limits: [{
+          amount: request.amount * 100,
+          interval: "all_time",
+        }],
+      },
     });
-  },
-});
-```
-
-### Tool with Enum Options
-
-```typescript
-const searchTool = defineTool({
-  name: "search",
-  description: "Search for items",
-  properties: {
-    query: prop("string", { description: "Search query" }),
-    category: prop("string", {
-      description: "Category to search in",
-      enum: ["books", "movies", "music"],
-    }),
-    limit: prop("number", {
-      description: "Max results",
-      default: 10,
-    }),
-  },
-  required: ["query"],
-  handler: async (args) => {
-    // ...
-  },
-});
-```
-
-## Custom Context
-
-Pass custom data to all your handlers using a context factory:
-
-```typescript
-interface MyContext {
-  requestId: string | number;
-  userId: string;
-  db: Database;
-}
-
-const server = createMCPServer<MyContext>({
-  name: "my-server",
-  version: "1.0.0",
-  tools: [myTool],
-  createContext: async (request) => ({
-    requestId: request.id,
-    userId: await getUserFromRequest(request),
-    db: database,
-  }),
-});
-
-// Access context in handlers
-const myTool = defineTool<{ query: string }, MyContext>({
-  name: "search",
-  description: "Search with user context",
-  properties: {
-    query: prop("string", { description: "Search query" }),
-  },
-  required: ["query"],
-  handler: async (args, context) => {
-    // Access context.userId, context.db, etc.
-    const results = await context.db.search(args.query, context.userId);
-    return jsonResult(results);
-  },
-});
-```
-
-## Resources
-
-Expose data sources that AI agents can read:
-
-```typescript
-const server = createMCPServer({
-  name: "my-server",
-  version: "1.0.0",
-  resources: [
-    {
-      uri: "file:///config.json",
-      name: "Configuration",
-      description: "Application configuration",
-      mimeType: "application/json",
-      handler: async (uri, context) => ({
-        uri,
-        mimeType: "application/json",
-        text: JSON.stringify(config),
-      }),
-    },
-  ],
-});
-```
-
-## Prompts
-
-Provide reusable prompt templates:
-
-```typescript
-const server = createMCPServer({
-  name: "my-server",
-  version: "1.0.0",
-  prompts: [
-    {
-      name: "code_review",
-      description: "Review code for best practices",
-      arguments: [
-        { name: "language", description: "Programming language", required: true },
-        { name: "code", description: "Code to review", required: true },
-      ],
-      handler: async (args) => [
-        {
-          role: "user",
-          content: {
-            type: "text",
-            text: `Review this ${args.language} code:\n\n${args.code}`,
-          },
-        },
-      ],
-    },
-  ],
-});
-```
-
-## Framework Examples
-
-### Next.js App Router
-
-```typescript
-// app/api/mcp/route.ts
-import { createMCPServer, defineTool, prop, textResult } from "@roony-pay/mcp";
-
-const server = createMCPServer({
-  name: "my-nextjs-server",
-  version: "1.0.0",
-  tools: [/* your tools */],
-});
-
-export async function POST(req: Request) {
-  const body = await req.json();
-  const response = await server.handleRequest(body);
-  return Response.json(response);
+    
+    // Return card details
+  }
 }
 ```
 
-### Express
+## Docker Deployment
 
-```typescript
-import express from "express";
-import { createMCPServer } from "@roony-pay/mcp";
-
-const app = express();
-app.use(express.json());
-
-const server = createMCPServer({
-  name: "my-express-server",
-  version: "1.0.0",
-  tools: [/* your tools */],
-});
-
-app.post("/mcp", async (req, res) => {
-  const response = await server.handleRequest(req.body);
-  res.json(response);
-});
-
-app.listen(3000);
-```
-
-### Fastify
-
-```typescript
-import Fastify from "fastify";
-import { createMCPServer } from "@roony-pay/mcp";
-
-const fastify = Fastify();
-
-const server = createMCPServer({
-  name: "my-fastify-server",
-  version: "1.0.0",
-  tools: [/* your tools */],
-});
-
-fastify.post("/mcp", async (request, reply) => {
-  const response = await server.handleRequest(request.body);
-  return response;
-});
-
-fastify.listen({ port: 3000 });
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  roony:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://...
+      - STRIPE_SECRET_KEY=sk_...
+      - STRIPE_CARDHOLDER_ID=ich_...
 ```
 
 ## API Reference
 
-### `createMCPServer(config)`
+### `createRoonyMCPServer(config)`
 
-Creates a new MCP server instance.
+Create an MCP server for AI agent governance.
 
 ```typescript
-const server = createMCPServer({
-  name: string;              // Server name
-  version: string;           // Server version
-  protocolVersion?: string;  // MCP protocol version (default: "2024-11-05")
-  tools?: MCPToolDefinition[];
-  resources?: MCPResourceDefinition[];
-  prompts?: MCPPromptDefinition[];
-  createContext?: (request: MCPRequest) => Promise<TContext> | TContext;
+const server = createRoonyMCPServer({
+  storage: StorageProvider,      // Your database implementation
+  paymentProvider: PaymentProvider, // Your payment processor
 });
+
+// Handle requests
+const response = await server.handleRequest(
+  mcpRequest,   // The MCP JSON-RPC request
+  agentId,      // ID of the agent making the request  
+  organizationId // ID of the organization
+);
 ```
 
-### `defineTool(options)`
+### `createSpendingChecker(config)`
 
-Define a tool with type-safe handler.
+Create a standalone spending checker (without MCP):
 
 ```typescript
-const tool = defineTool({
-  name: string;
-  description: string;
-  properties: Record<string, MCPToolProperty>;
-  required?: string[];
-  handler: (args, context) => Promise<MCPToolResult> | MCPToolResult;
+const checker = createSpendingChecker({
+  storage: myStorageProvider,
 });
-```
 
-### `prop(type, options)`
-
-Create a property definition for tool input schemas.
-
-```typescript
-prop("string" | "number" | "boolean" | "array" | "object", {
-  description: string;
-  enum?: string[];
-  default?: unknown;
+const result = await checker.checkSpending({
+  agentId: "agent_123",
+  amount: 50.00,
+  currency: "usd",
+  merchantName: "Amazon",
+  description: "Office supplies",
 });
+
+if (result.allowed && !result.requiresApproval) {
+  // Proceed with purchase
+} else if (result.requiresApproval) {
+  // Queue for human review
+} else {
+  // Rejected - show result.rejectionMessage
+}
 ```
 
-### Result Helpers
+## Rejection Codes
 
-```typescript
-textResult(text: string, isError?: boolean): MCPToolResult
-jsonResult(data: unknown, isError?: boolean): MCPToolResult
-errorResult(message: string): MCPToolResult
-multiResult(items: MCPContent[], isError?: boolean): MCPToolResult
-```
+| Code | Description |
+|------|-------------|
+| `AGENT_NOT_FOUND` | Agent ID not found |
+| `OVER_TRANSACTION_LIMIT` | Exceeds per-transaction limit |
+| `DAILY_LIMIT_EXCEEDED` | Daily spending limit reached |
+| `MONTHLY_LIMIT_EXCEEDED` | Monthly spending limit reached |
+| `ORG_BUDGET_EXCEEDED` | Organization budget exhausted |
+| `OVER_ORG_MAX_TRANSACTION` | Exceeds org max transaction |
+| `MERCHANT_BLOCKED` | Merchant is blocked |
+| `MERCHANT_NOT_ALLOWED` | Merchant not in allowlist |
+| `CATEGORY_BLOCKED` | Merchant category blocked |
 
-### Validation Helpers
+## Hosted vs Self-Hosted
 
-```typescript
-validateArgs<T>(args, required: string[]): args is T
-requireArg<T>(args, key: string, type: string): T
-optionalArg<T>(args, key: string, defaultValue: T): T
-```
-
-## MCP Protocol
-
-This library implements the [Model Context Protocol](https://modelcontextprotocol.io) specification (version 2024-11-05).
-
-### Supported Methods
-
-- `initialize` / `initialized`
-- `ping`
-- `tools/list` / `tools/call`
-- `resources/list` / `resources/read`
-- `prompts/list` / `prompts/get`
+| Feature | Self-Hosted | Hosted (roony.pay) |
+|---------|-------------|-------------------|
+| Spending controls | ✅ | ✅ |
+| Approval workflows | ✅ | ✅ |
+| MCP support | ✅ | ✅ |
+| Virtual cards | You implement | ✅ Built-in |
+| Dashboard | You build | ✅ Included |
+| Stripe integration | You implement | ✅ Included |
+| Support | Community | Priority |
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+```bash
+# Clone the repo
+git clone https://github.com/roony-pay/roony-mcp.git
+cd roony-mcp
+
+# Install dependencies
+npm install
+
+# Build
+npm run build
+
+# Run tests
+npm test
+```
 
 ## License
 
 MIT © [Roony](https://roony.pay)
+
+---
+
+**Questions?** Open an issue or reach out at hello@roony.pay

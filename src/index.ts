@@ -1,107 +1,112 @@
 /**
- * @roony-pay/mcp
+ * Roony Governance
  * 
- * Open source MCP (Model Context Protocol) server library
- * for building AI agent tools.
+ * Open source AI agent payment governance engine.
+ * 
+ * Features:
+ * - Spending limits (per-transaction, daily, monthly)
+ * - Merchant allow/block lists
+ * - Organization-wide guardrails
+ * - Human approval workflows
+ * - MCP (Model Context Protocol) support
+ * - Virtual card issuance
  * 
  * @example
  * ```typescript
- * import { createMCPServer, defineTool, prop, textResult } from "@roony-pay/mcp";
+ * import {
+ *   createRoonyMCPServer,
+ *   InMemoryStorageProvider,
+ *   MockPaymentProvider,
+ * } from "@roony-pay/governance";
  * 
- * const server = createMCPServer({
- *   name: "my-server",
- *   version: "1.0.0",
- *   tools: [
- *     defineTool({
- *       name: "hello",
- *       description: "Say hello",
- *       properties: {
- *         name: prop("string", { description: "Name to greet" }),
- *       },
- *       required: ["name"],
- *       handler: async (args) => textResult(`Hello, ${args.name}!`),
- *     }),
- *   ],
+ * // Create providers
+ * const storage = new InMemoryStorageProvider();
+ * const payments = new MockPaymentProvider();
+ * 
+ * // Create MCP server
+ * const mcpServer = createRoonyMCPServer({
+ *   storage,
+ *   paymentProvider: payments,
  * });
  * 
- * // Use with Next.js
- * export async function POST(req: Request) {
- *   const body = await req.json();
- *   const response = await server.handleRequest(body);
- *   return Response.json(response);
- * }
+ * // Handle MCP request
+ * const response = await mcpServer.handleRequest(
+ *   request,
+ *   agentId,
+ *   organizationId
+ * );
  * ```
+ * 
+ * For production, implement your own StorageProvider and PaymentProvider,
+ * or use the hosted Roony service at https://roony.pay
  */
 
-// Server
-export { MCPServer, createMCPServer } from "./server";
-
-// Types
+// Core types
 export type {
-  // Core types
+  // Agents & Organizations
+  Agent,
+  Organization,
+  OrgGuardrails,
+  
+  // Purchases
+  PurchaseRequest,
+  PurchaseIntent,
+  PurchaseStatus,
+  
+  // Spending checks
+  SpendingCheckRequest,
+  SpendingCheckResult,
+  RejectionCode,
+  
+  // Virtual cards
+  VirtualCard,
+  VirtualCardRequest,
+  
+  // Approvals
+  PendingApproval,
+  ApprovalReason,
+  
+  // Budget
+  BudgetUtilization,
+  AgentBudget,
+  
+  // MCP
   MCPRequest,
   MCPResponse,
   MCPError,
-  MCPMethod,
-  
-  // Tool types
   MCPTool,
-  MCPToolCall,
-  MCPToolResult,
-  MCPToolInputSchema,
   MCPToolProperty,
-  MCPToolDefinition,
-  MCPToolHandler,
-  MCPContent,
-  
-  // Resource types
-  MCPResource,
-  MCPResourceContent,
-  MCPResourceDefinition,
-  MCPResourceHandler,
-  
-  // Prompt types
-  MCPPrompt,
-  MCPPromptArgument,
-  MCPPromptMessage,
-  MCPPromptDefinition,
-  MCPPromptHandler,
-  
-  // Server types
-  MCPServerConfig,
-  MCPServerCapabilities,
-  MCPServerInfo,
-  MCPInitializeResult,
-  
-  // Client types
-  MCPClientCapabilities,
-  MCPClientInfo,
-  
-  // Context
-  MCPContext,
+  MCPToolResult,
 } from "./types";
 
-export { ErrorCodes } from "./types";
+export { MCPErrorCodes } from "./types";
 
-// Utilities
+// Governance
 export {
-  // Result builders
-  textResult,
-  jsonResult,
-  errorResult,
-  multiResult,
-  
-  // Schema builders
-  prop,
-  schema,
-  defineTool,
-  
-  // Validation helpers
-  validateArgs,
-  requireArg,
-  optionalArg,
-  
-  // Request parsing
-  parseMCPRequest,
-} from "./utils";
+  SpendingChecker,
+  createSpendingChecker,
+  type SpendingCheckerConfig,
+} from "./governance/spending-checker";
 
+// MCP Server
+export {
+  RoonyMCPServer,
+  createRoonyMCPServer,
+  parseMCPRequest,
+  type RoonyMCPServerConfig,
+} from "./mcp/server";
+
+export { ROONY_TOOLS, type RoonyToolName } from "./mcp/tools";
+
+// Providers
+export {
+  type StorageProvider,
+  InMemoryStorageProvider,
+} from "./providers/storage-provider";
+
+export {
+  type PaymentProvider,
+  MockPaymentProvider,
+  StripeIssuingProvider,
+  type StripeIssuingConfig,
+} from "./providers/payment-provider";

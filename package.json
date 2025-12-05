@@ -1,7 +1,7 @@
 {
-  "name": "@roony-pay/mcp",
+  "name": "@roony-pay/governance",
   "version": "1.0.0",
-  "description": "Open source MCP (Model Context Protocol) server library for building AI agent tools",
+  "description": "Open source AI agent payment governance engine with spending controls, approval workflows, and MCP support",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -25,16 +25,20 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "mcp",
-    "model-context-protocol",
     "ai",
     "agents",
     "llm",
+    "payments",
+    "governance",
+    "spending-controls",
+    "virtual-cards",
+    "mcp",
+    "model-context-protocol",
     "anthropic",
     "claude",
     "openai",
-    "tools",
-    "json-rpc"
+    "stripe",
+    "fintech"
   ],
   "author": "Roony <hello@roony.pay>",
   "license": "MIT",
@@ -55,4 +59,3 @@
     "node": ">=18.0.0"
   }
 }
-

@@ -1,11 +1,209 @@
 /**
- * MCP Protocol Types
- * Based on Model Context Protocol specification (2024-11-05)
- * https://modelcontextprotocol.io
+ * Core types for Roony Governance
  */
 
 // ============================================
-// Core JSON-RPC Types
+// Agent Types
+// ============================================
+
+export interface Agent {
+  id: string;
+  organizationId: string;
+  name: string;
+  status: "active" | "paused" | "suspended";
+  
+  // Spending limits
+  monthlyLimit?: number;
+  dailyLimit?: number;
+  perTransactionLimit?: number;
+  
+  // Approval rules
+  approvalThreshold?: number;
+  flagNewVendors?: boolean;
+  
+  // Merchant restrictions
+  blockedMerchants?: string[];
+  allowedMerchants?: string[];
+}
+
+// ============================================
+// Organization Types
+// ============================================
+
+export interface Organization {
+  id: string;
+  name: string;
+  monthlyBudget?: number;
+  alertThreshold?: number;
+  guardrails?: OrgGuardrails;
+}
+
+export interface OrgGuardrails {
+  blockCategories?: string[];
+  requireApprovalAbove?: number;
+  flagAllNewVendors?: boolean;
+  maxTransactionAmount?: number;
+}
+
+// ============================================
+// Purchase Types
+// ============================================
+
+export interface PurchaseRequest {
+  agentId: string;
+  amount: number;
+  currency: string;
+  description: string;
+  merchant: {
+    name: string;
+    url?: string;
+    mcc?: string;
+  };
+  metadata?: Record<string, string>;
+}
+
+export interface PurchaseIntent {
+  id: string;
+  agentId: string;
+  organizationId: string;
+  amount: number;
+  currency: string;
+  description: string;
+  merchantName: string;
+  merchantUrl?: string;
+  status: PurchaseStatus;
+  rejectionCode?: string;
+  rejectionReason?: string;
+  metadata?: Record<string, string>;
+  createdAt: Date;
+}
+
+export type PurchaseStatus = 
+  | "pending"
+  | "pending_approval"
+  | "approved"
+  | "rejected"
+  | "expired";
+
+// ============================================
+// Spending Check Types
+// ============================================
+
+export interface SpendingCheckRequest {
+  agentId: string;
+  amount: number;
+  currency: string;
+  merchantName: string;
+  description: string;
+}
+
+export interface SpendingCheckResult {
+  allowed: boolean;
+  requiresApproval: boolean;
+  approvalReason?: string;
+  rejectionCode?: RejectionCode;
+  rejectionMessage?: string;
+}
+
+export type RejectionCode =
+  | "AGENT_NOT_FOUND"
+  | "OVER_TRANSACTION_LIMIT"
+  | "OVER_ORG_MAX_TRANSACTION"
+  | "DAILY_LIMIT_EXCEEDED"
+  | "MONTHLY_LIMIT_EXCEEDED"
+  | "ORG_BUDGET_EXCEEDED"
+  | "MERCHANT_BLOCKED"
+  | "MERCHANT_NOT_ALLOWED"
+  | "CATEGORY_BLOCKED"
+  | "NO_PAYMENT_METHOD"
+  | "POLICY_REJECTED";
+
+// ============================================
+// Virtual Card Types
+// ============================================
+
+export interface VirtualCard {
+  id: string;
+  cardNumber: string;
+  expMonth: number;
+  expYear: number;
+  cvc: string;
+  billingZip?: string;
+  hardLimit: number;
+  currency: string;
+  expiresAt: Date;
+}
+
+export interface VirtualCardRequest {
+  purchaseIntentId: string;
+  organizationId: string;
+  agentId: string;
+  amount: number;
+  currency: string;
+  merchantName?: string;
+  allowedCategories?: string[];
+  blockedCategories?: string[];
+}
+
+// ============================================
+// Approval Types
+// ============================================
+
+export interface PendingApproval {
+  id: string;
+  purchaseIntentId: string;
+  organizationId: string;
+  agentId: string;
+  amount: number;
+  merchantName: string;
+  reason: ApprovalReason;
+  reasonDetails?: string;
+  status: "pending" | "approved" | "rejected";
+  reviewedBy?: string;
+  reviewedAt?: Date;
+  reviewNotes?: string;
+  createdAt: Date;
+}
+
+export type ApprovalReason =
+  | "OVER_THRESHOLD"
+  | "NEW_VENDOR"
+  | "ORG_GUARDRAIL"
+  | "MANUAL_REVIEW";
+
+// ============================================
+// Budget Types
+// ============================================
+
+export interface BudgetUtilization {
+  orgBudget: number | null;
+  orgSpent: number;
+  orgRemaining: number | null;
+  percentUsed: number | null;
+  alertThreshold: number;
+  isOverThreshold: boolean;
+}
+
+export interface AgentBudget {
+  agentId: string;
+  agentName: string;
+  limits: {
+    perTransaction?: number;
+    daily?: number;
+    monthly?: number;
+  };
+  currentSpend: {
+    daily: number;
+    monthly: number;
+  };
+  remaining: {
+    daily: number | "unlimited";
+    monthly: number | "unlimited";
+  };
+}
+
+// ============================================
+// MCP Types
 // ============================================
 
 export interface MCPRequest {
@@ -28,14 +226,14 @@ export interface MCPError {
   data?: unknown;
 }
 
-// ============================================
-// Tool Types
-// ============================================
-
-export interface MCPToolInputSchema {
-  type: "object";
-  properties: Record<string, MCPToolProperty>;
-  required: string[];
+export interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: "object";
+    properties: Record<string, MCPToolProperty>;
+    required: string[];
+  };
 }
 
 export interface MCPToolProperty {
@@ -45,237 +243,15 @@ export interface MCPToolProperty {
   default?: unknown;
 }
 
-export interface MCPTool {
-  name: string;
-  description: string;
-  inputSchema: MCPToolInputSchema;
-}
-
-export interface MCPToolCall {
-  name: string;
-  arguments: Record<string, unknown>;
-}
-
 export interface MCPToolResult {
-  content: MCPContent[];
+  content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
 }
 
-export interface MCPContent {
-  type: "text" | "image" | "resource";
-  text?: string;
-  data?: string;
-  mimeType?: string;
-}
-
-// ============================================
-// Resource Types
-// ============================================
-
-export interface MCPResource {
-  uri: string;
-  name: string;
-  description?: string;
-  mimeType?: string;
-}
-
-export interface MCPResourceContent {
-  uri: string;
-  mimeType?: string;
-  text?: string;
-  blob?: string;
-}
-
-// ============================================
-// Prompt Types
-// ============================================
-
-export interface MCPPrompt {
-  name: string;
-  description?: string;
-  arguments?: MCPPromptArgument[];
-}
-
-export interface MCPPromptArgument {
-  name: string;
-  description?: string;
-  required?: boolean;
-}
-
-export interface MCPPromptMessage {
-  role: "user" | "assistant";
-  content: MCPContent;
-}
-
-// ============================================
-// Server Capability Types
-// ============================================
-
-export interface MCPServerCapabilities {
-  tools?: {
-    listChanged?: boolean;
-  };
-  resources?: {
-    subscribe?: boolean;
-    listChanged?: boolean;
-  };
-  prompts?: {
-    listChanged?: boolean;
-  };
-  logging?: Record<string, never>;
-}
-
-export interface MCPServerInfo {
-  name: string;
-  version: string;
-}
-
-export interface MCPInitializeResult {
-  protocolVersion: string;
-  capabilities: MCPServerCapabilities;
-  serverInfo: MCPServerInfo;
-}
-
-// ============================================
-// Client Types
-// ============================================
-
-export interface MCPClientCapabilities {
-  roots?: {
-    listChanged?: boolean;
-  };
-  sampling?: Record<string, never>;
-}
-
-export interface MCPClientInfo {
-  name: string;
-  version: string;
-}
-
-// ============================================
-// Standard Methods
-// ============================================
-
-export type MCPMethod =
-  | "initialize"
-  | "initialized"
-  | "tools/list"
-  | "tools/call"
-  | "resources/list"
-  | "resources/read"
-  | "resources/subscribe"
-  | "resources/unsubscribe"
-  | "prompts/list"
-  | "prompts/get"
-  | "logging/setLevel"
-  | "ping";
-
-// ============================================
-// Error Codes (JSON-RPC 2.0 + MCP specific)
-// ============================================
-
-export const ErrorCodes = {
-  // JSON-RPC 2.0 standard errors
+export const MCPErrorCodes = {
   ParseError: -32700,
   InvalidRequest: -32600,
   MethodNotFound: -32601,
   InvalidParams: -32602,
   InternalError: -32603,
-  
-  // MCP specific errors (-32000 to -32099)
-  ServerNotInitialized: -32002,
-  UnknownErrorCode: -32001,
 } as const;
-
-export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
-
-// ============================================
-// Handler Types
-// ============================================
-
-/**
- * Context passed to tool handlers
- */
-export interface MCPContext {
-  /** Unique identifier for this request */
-  requestId: string | number;
-  /** Any custom data you want to pass through */
-  [key: string]: unknown;
-}
-
-/**
- * Tool handler function type
- */
-export type MCPToolHandler<TArgs = Record<string, unknown>, TContext = MCPContext> = (
-  args: TArgs,
-  context: TContext
-) => Promise<MCPToolResult> | MCPToolResult;
-
-/**
- * Tool definition with handler
- */
-export interface MCPToolDefinition<TArgs = Record<string, unknown>, TContext = MCPContext> {
-  name: string;
-  description: string;
-  inputSchema: MCPToolInputSchema;
-  handler: MCPToolHandler<TArgs, TContext>;
-}
-
-/**
- * Resource handler function type
- */
-export type MCPResourceHandler<TContext = MCPContext> = (
-  uri: string,
-  context: TContext
-) => Promise<MCPResourceContent> | MCPResourceContent;
-
-/**
- * Resource definition with handler
- */
-export interface MCPResourceDefinition<TContext = MCPContext> {
-  uri: string;
-  name: string;
-  description?: string;
-  mimeType?: string;
-  handler: MCPResourceHandler<TContext>;
-}
-
-/**
- * Prompt handler function type
- */
-export type MCPPromptHandler<TContext = MCPContext> = (
-  args: Record<string, string>,
-  context: TContext
-) => Promise<MCPPromptMessage[]> | MCPPromptMessage[];
-
-/**
- * Prompt definition with handler
- */
-export interface MCPPromptDefinition<TContext = MCPContext> {
-  name: string;
-  description?: string;
-  arguments?: MCPPromptArgument[];
-  handler: MCPPromptHandler<TContext>;
-}
-
-// ============================================
-// Server Configuration
-// ============================================
-
-export interface MCPServerConfig<TContext = MCPContext> {
-  /** Server name */
-  name: string;
-  /** Server version */
-  version: string;
-  /** MCP protocol version (default: "2024-11-05") */
-  protocolVersion?: string;
-  /** Tool definitions */
-  tools?: MCPToolDefinition<Record<string, unknown>, TContext>[];
-  /** Resource definitions */
-  resources?: MCPResourceDefinition<TContext>[];
-  /** Prompt definitions */
-  prompts?: MCPPromptDefinition<TContext>[];
-  /** Context factory - called for each request */
-  createContext?: (request: MCPRequest) => TContext | Promise<TContext>;
-}
-
